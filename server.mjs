@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
-import { createApp, toNodeListener, fromNodeMiddleware, defineEventHandler, send } from 'h3';
+import { createApp, toNodeListener, fromNodeMiddleware, defineEventHandler, createRouter, getQuery, readBody } from 'h3';
 import { listen } from 'listhen';
+import destr from 'destr';
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production';
@@ -11,7 +12,10 @@ const base = process.env.BASE || '/';
 const templateHtml = isProduction ? await fs.readFile('./dist/client/index.html', 'utf-8') : '';
 const ssrManifest = isProduction ? await fs.readFile('./dist/client/.vite/ssr-manifest.json', 'utf-8') : undefined;
 
+const router = createRouter();
 const app = createApp();
+
+app.use(router);
 
 // Add Vite or respective production middlewares
 let vite;
@@ -21,6 +25,10 @@ if (!isProduction) {
     server: { middlewareMode: true },
     appType: 'custom',
     base,
+    define: {
+      'import.meta.dev': !isProduction,
+      'import.meta.server': true,
+    },
   });
   app.use(fromNodeMiddleware(vite.middlewares));
 } else {
@@ -31,10 +39,11 @@ if (!isProduction) {
 }
 
 // Serve HTML
-app.use(
-  '*',
+router.get(
+  '/',
   defineEventHandler(async (event) => {
     const { req, res } = event.node;
+    console.log(req.originalUrl);
     try {
       const url = req.originalUrl.replace(base, '');
 
@@ -63,6 +72,66 @@ app.use(
   })
 );
 
+const ISLAND_SUFFIX_RE = /\.json(\?.*)?$/;
+async function getIslandContext(event) {
+  let url = event.path || '';
+
+  const componentParts = url
+    .substring('/__island'.length + 1)
+    .replace(ISLAND_SUFFIX_RE, '')
+    .split('_');
+  const hashId = componentParts.length > 1 ? componentParts.pop() : undefined;
+  const componentName = componentParts.join('_');
+
+  // TODO: Validate context
+  const context = event.method === 'GET' ? getQuery(event) : await readBody(event);
+
+  const ctx = {
+    url: '/',
+    ...context,
+    id: hashId,
+    name: componentName,
+    props: destr(context.props) || {},
+  };
+
+  return ctx;
+}
+
+router.get(
+  '/__island/*',
+  defineEventHandler(async (event) => {
+    const { req, res } = event.node;
+    console.log('island', req.originalUrl);
+    try {
+      const url = req.originalUrl.replace(base, '');
+
+      let render;
+      if (!isProduction) {
+        render = (await vite.ssrLoadModule('/src/entry-island.js')).render;
+      } else {
+        template = templateHtml;
+        render = (await import('./dist/entry-island.js')).render;
+      }
+
+      const islandContext = await getIslandContext(event);
+
+      const ssrContext = {
+        islandContext,
+      };
+
+      const rendered = await render(ssrContext);
+
+      return {
+        id: islandContext.id,
+        html: ssrContext.teleports['island'].replace(/<!--teleport(?: start)? anchor-->/g, ''),
+      };
+    } catch (e) {
+      vite?.ssrFixStacktrace(e);
+      console.log(e.stack);
+      res.status(500).end(e.stack);
+    }
+  })
+);
 (async () => {
   await listen(toNodeListener(app), { port: 3000 });
 })();

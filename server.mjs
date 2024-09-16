@@ -28,6 +28,7 @@ if (!isProduction) {
     define: {
       'import.meta.dev': !isProduction,
       'import.meta.server': true,
+      'import.meta.client': false,
     },
   });
   app.use(fromNodeMiddleware(vite.middlewares));
@@ -43,7 +44,7 @@ router.get(
   '/',
   defineEventHandler(async (event) => {
     const { req, res } = event.node;
-    console.log(req.originalUrl);
+
     try {
       const url = req.originalUrl.replace(base, '');
 
@@ -109,8 +110,7 @@ router.get(
       if (!isProduction) {
         render = (await vite.ssrLoadModule('/src/entry-island.js')).render;
       } else {
-        template = templateHtml;
-        render = (await import('./dist/entry-island.js')).render;
+        render = (await import('./dist/island/entry-island.js')).render;
       }
 
       const islandContext = await getIslandContext(event);

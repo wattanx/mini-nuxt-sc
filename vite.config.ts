@@ -10,4 +10,7 @@ export default defineConfig({
       entries: ['src/entry-client'],
     }),
   ],
+  define: {
+    'import.meta.client': true,
+  },
 });

@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue';
+import { ref } from 'vue';
+import Boundary from './components/Boundary.vue';
 import Island from './lib/Island';
+
+const count = ref(0);
 </script>
 
 <template>
@@ -12,8 +15,12 @@ import Island from './lib/Island';
       <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
     </a>
   </div>
-  <HelloWorld msg="Vite + Vue" />
-  <Island name="CodeExample" />
+  <Suspense>
+    <Boundary label="Client Component">
+      <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
+      <Island name="CodeExample" :props="{ count }" />
+    </Boundary>
+  </Suspense>
 </template>
 
 <style scoped>

@@ -1,7 +1,18 @@
 import fs from 'node:fs/promises';
-import { createApp, toNodeListener, fromNodeMiddleware, defineEventHandler, createRouter, getQuery, readBody } from 'h3';
+import {
+  createApp,
+  toNodeListener,
+  fromNodeMiddleware,
+  defineEventHandler,
+  createRouter,
+  getQuery,
+  readBody,
+  fetchWithEvent,
+} from 'h3';
 import { listen } from 'listhen';
 import destr from 'destr';
+import type { SSRContext } from './src/types/ssr-context';
+import { createFetch as createLocalFetch, createCall } from 'unenv/runtime/fetch/index';
 
 // Constants
 const isProduction = process.env.NODE_ENV === 'production';
@@ -45,8 +56,14 @@ router.get(
   defineEventHandler(async (event) => {
     const { req, res } = event.node;
 
+    const localCall = createCall(toNodeListener(app) as any);
+    const localFetch = createLocalFetch(localCall, globalThis.fetch);
+
+    // @ts-expect-error
+    event.fetch = (req, init) => fetchWithEvent(event, req, init, { fetch: localFetch });
+
     try {
-      const url = req.originalUrl.replace(base, '');
+      const url = req.originalUrl!.replace(base, '');
 
       let template;
       let render;
@@ -60,7 +77,7 @@ router.get(
         render = (await import('./dist/server/entry-server.js')).render;
       }
 
-      const rendered = await render(url, ssrManifest);
+      const rendered = await render({ event });
 
       const html = template.replace(`<!--app-head-->`, rendered.head ?? '').replace(`<!--app-html-->`, rendered.html ?? '');
 
@@ -68,7 +85,7 @@ router.get(
     } catch (e) {
       vite?.ssrFixStacktrace(e);
       console.log(e.stack);
-      res.status(500).end(e.stack);
+      res.statusCode = 500;
     }
   })
 );
@@ -102,9 +119,8 @@ router.get(
   '/__island/*',
   defineEventHandler(async (event) => {
     const { req, res } = event.node;
-    console.log('island', req.originalUrl);
     try {
-      const url = req.originalUrl.replace(base, '');
+      const url = req.originalUrl!.replace(base, '');
 
       let render;
       if (!isProduction) {
@@ -115,7 +131,8 @@ router.get(
 
       const islandContext = await getIslandContext(event);
 
-      const ssrContext = {
+      const ssrContext: SSRContext = {
+        event,
         islandContext,
       };
 
@@ -123,15 +140,42 @@ router.get(
 
       return {
         id: islandContext.id,
-        html: ssrContext.teleports['island'].replace(/<!--teleport(?: start)? anchor-->/g, ''),
+        html: replaceServerOnlyComponentsSlots(ssrContext, rendered.html),
       };
     } catch (e) {
       vite?.ssrFixStacktrace(e);
       console.log(e.stack);
-      res.status(500).end(e.stack);
+      res.statusCode = 500;
     }
   })
 );
 (async () => {
   await listen(toNodeListener(app), { port: 3000 });
 })();
+
+const SSR_TELEPORT_MARKER = /^uid=([^;]*);slot=(.*)$/;
+function replaceServerOnlyComponentsSlots(ssrContext: SSRContext, html: string): string {
+  const { teleports, islandContext } = ssrContext;
+  if (islandContext || !teleports) {
+    return html;
+  }
+  for (const key in teleports) {
+    const match = key.match(SSR_TELEPORT_MARKER);
+    if (!match) {
+      continue;
+    }
+    const [, uid, slot] = match;
+    if (!uid || !slot) {
+      continue;
+    }
+    html = html.replace(
+      new RegExp(
+        `<div nuxt-ssr-component-uid="${uid}"[^>]*>((?!nuxt-ssr-slot-name="${slot}"|nuxt-ssr-component-uid)[\\s\\S])*<div [^>]*nuxt-ssr-slot-name="${slot}"[^>]*>`
+      ),
+      (full) => {
+        return full + teleports[key];
+      }
+    );
+  }
+  return html;
+}

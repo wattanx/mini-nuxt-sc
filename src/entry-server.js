@@ -1,11 +1,10 @@
 import { renderToString } from 'vue/server-renderer';
 import { createApp } from './main';
 
-export async function render() {
+export async function render(ssrContext = {}) {
   const { app } = createApp();
 
-  const ctx = {};
-  const html = await renderToString(app, ctx);
+  const html = await renderToString(app, ssrContext);
 
   return { html };
 }

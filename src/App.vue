@@ -18,7 +18,9 @@ const count = ref(0);
   <Suspense>
     <Boundary label="Client Component">
       <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
-      <Island name="CodeExample" :props="{ count }" />
+      <Island name="CodeExample" :props="{ count }">
+        <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
+      </Island>
     </Boundary>
   </Suspense>
 </template>

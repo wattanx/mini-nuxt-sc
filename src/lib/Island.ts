@@ -1,12 +1,32 @@
 import type { RendererNode } from 'vue';
-import { watch, computed, createStaticVNode, defineComponent, getCurrentInstance, h, ref, createVNode } from 'vue';
+import {
+  watch,
+  computed,
+  createStaticVNode,
+  defineComponent,
+  getCurrentInstance,
+  h,
+  ref,
+  createVNode,
+  onMounted,
+  nextTick,
+  Fragment,
+  Teleport,
+} from 'vue';
 import { hash } from 'ohash';
 import { randomUUID } from 'uncrypto';
 import { joinURL, withQuery } from 'ufo';
 import { debounce } from 'perfect-debounce';
-import { ofetch } from 'ofetch';
+import { useSSRContext } from 'vue';
+import { getSlotProps } from './utils';
+import { SSRContext } from '../types/ssr-context';
 
 const pKey = '_islandPromises';
+const SSR_UID_RE = /nuxt-ssr-component-uid="([^"]*)"/;
+const UID_ATTR = /nuxt-ssr-component-uid(="([^"]*)")?/;
+const SLOTNAME_RE = /nuxt-ssr-slot-name="([^"]*)"/g;
+const SLOT_FALLBACK_RE =
+  /<div nuxt-slot-fallback-start="([^"]*)"[^>]*><\/div>(((?!<div nuxt-slot-fallback-end[^>]*>)[\s\S])*)<div nuxt-slot-fallback-end[^>]*><\/div>/g;
 
 export default defineComponent({
   name: 'Island',
@@ -35,28 +55,61 @@ export default defineComponent({
   },
   emits: ['error'],
   async setup(props, { slots, emit }) {
+    const ssrContext = useSSRContext() as SSRContext;
+
     const teleportKey = ref(0);
+    const instance = getCurrentInstance()!;
+    const mounted = ref(false);
+    onMounted(() => {
+      mounted.value = true;
+    });
+    const ssrHTML = ref<string>(
+      import.meta.client ? getFragmentHTML(instance.vnode?.el ?? null).join('') ?? '<div></div>' : '<div></div>'
+    );
+    const uid = ref<string>(ssrHTML.value.match(SSR_UID_RE)?.[1] ?? randomUUID());
+    const availableSlots = computed(() => {
+      return [...ssrHTML.value.matchAll(SLOTNAME_RE)].map((m) => m[1]);
+    });
+
+    const html = computed(() => {
+      const currentSlots = Object.keys(slots);
+      return ssrHTML.value.replace(SLOT_FALLBACK_RE, (full, slotName, content) => {
+        // remove fallback to insert slots
+        if (currentSlots.includes(slotName)) {
+          return '';
+        }
+        return content;
+      });
+    });
+
+    function setUid() {
+      uid.value = ssrHTML.value.match(SSR_UID_RE)?.[1] ?? (randomUUID() as string);
+    }
 
     const error = ref<unknown>(null);
-    const instance = getCurrentInstance()!;
+
     const hashId = computed(() => hash([props.name, props.props, props.context]));
 
-    const html = ref(import.meta.client ? getFragmentHTML(instance?.vnode?.el).join('') ?? '<div></div>' : '<div></div>');
+    const slotProps = computed(() => {
+      return getSlotProps(ssrHTML.value);
+    });
+
+    // @ts-expect-error
+    const eventFetch = ssrContext ? ssrContext.event.fetch : fetch;
 
     const key = ref(0);
     async function _fetchComponent() {
       const key = `${props.name}_${hashId.value}`;
 
-      const url = `http://localhost:3000/__island/${key}.json`;
+      const url = `/__island/${key}.json`;
 
-      const r = await fetch(
-        withQuery((import.meta.dev && import.meta.client) || props.source ? url : url, {
+      const r = await eventFetch(
+        withQuery((import.meta.dev && import.meta.client) || props.source ? url : joinURL('/', url), {
           ...props.context,
           props: props.props ? JSON.stringify(props.props) : undefined,
         })
       );
 
-      // @ts-expect-error
       const result = import.meta.server || !import.meta.dev ? await r.json() : r._data;
 
       return result;
@@ -67,21 +120,28 @@ export default defineComponent({
     async function fetchComponent() {
       ssrApp[pKey] = ssrApp[pKey] || {};
 
-      if (!ssrApp[pKey][hashId.value]) {
-        ssrApp[pKey][hashId.value] = _fetchComponent().finally(() => {
+      if (!ssrApp[pKey][uid.value]) {
+        ssrApp[pKey][uid.value] = _fetchComponent().finally(() => {
           // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-          delete ssrApp[pKey]![hashId.value];
+          delete ssrApp[pKey]![uid.value];
         });
       }
 
       try {
-        const res = await ssrApp[pKey][hashId.value];
+        const res = await ssrApp[pKey][uid.value];
+
+        ssrHTML.value = res.html.replace(UID_ATTR, () => {
+          return `nuxt-ssr-component-uid="${randomUUID()}"`;
+        });
 
         key.value++;
         error.value = null;
-        if (res?.html) {
-          html.value = res.html;
+
+        if (import.meta.client) {
+          // must await next tick for Teleport to work correctly with static node re-rendering
+          await nextTick();
         }
+        setUid();
       } catch (e) {
         console.error(e);
         error.value = e;
@@ -107,14 +167,38 @@ export default defineComponent({
       return () => createVNode('div');
     }
 
-    return () =>
-      h(
-        (_, { slots }) => slots.default?.(),
-        { key: key.value },
-        {
-          default: () => [createStaticVNode(html.value, 1)],
+    return () => {
+      const nodes = [
+        createVNode(
+          Fragment,
+          {
+            key: key.value,
+          },
+          [h(createStaticVNode(html.value, 1))]
+        ),
+      ];
+
+      if (uid.value && (mounted.value || import.meta.server)) {
+        for (const slot in slots) {
+          if (availableSlots.value.includes(slot)) {
+            nodes.push(
+              createVNode(
+                Teleport,
+                {
+                  to: import.meta.client
+                    ? `[nuxt-ssr-component-uid='${uid.value}'] [nuxt-ssr-slot-name='${slot}']`
+                    : `uid=${uid.value};slot=${slot}`,
+                },
+                {
+                  default: () => (slotProps.value[slot] ?? [undefined]).map((data: any) => slots[slot]?.(data)),
+                }
+              )
+            );
+          }
         }
-      );
+      }
+      return nodes;
+    };
   },
 });
 

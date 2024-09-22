@@ -10,6 +10,7 @@ This repository is a minimal implementation of Nuxt Server Components
 | async components       | ❌     |
 | props                  | ✅     |
 | slots                  | ✅     |
+| scoped slots           | ❌     |
 | v-for                  | ❌     |
 | server only components | ❌     |
 | selective hydration    | ❌     |

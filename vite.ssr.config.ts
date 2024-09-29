@@ -13,7 +13,7 @@ export default defineConfig({
     islandsTransform.vite(),
   ],
   define: {
-    'import.meta.client': true,
-    'import.meta.dev': process.env.NODE_ENV === 'development',
+    'import.meta.client': false,
+    'import.meta.server': true,
   },
 });

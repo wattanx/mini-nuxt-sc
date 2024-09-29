@@ -95,7 +95,7 @@ export default defineComponent({
     });
 
     // @ts-expect-error
-    const eventFetch = ssrContext ? ssrContext.event.fetch : fetch;
+    const eventFetch = import.meta.server ? ssrContext.event.fetch : fetch;
 
     const key = ref(0);
     async function _fetchComponent() {
@@ -141,7 +141,6 @@ export default defineComponent({
           // must await next tick for Teleport to work correctly with static node re-rendering
           await nextTick();
         }
-        setUid();
       } catch (e) {
         console.error(e);
         error.value = e;

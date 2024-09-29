@@ -7,19 +7,13 @@ const count = ref(0);
 </script>
 
 <template>
-  <div>
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
-  </div>
   <Suspense>
     <Boundary label="Client Component">
       <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
       <Island name="CodeExample" :props="{ count }">
-        <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
+        <Boundary label="Client Component" class="mt-6">
+          <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
+        </Boundary>
       </Island>
     </Boundary>
   </Suspense>

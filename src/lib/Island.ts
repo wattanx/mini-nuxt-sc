@@ -141,6 +141,7 @@ export default defineComponent({
           // must await next tick for Teleport to work correctly with static node re-rendering
           await nextTick();
         }
+        setUid();
       } catch (e) {
         console.error(e);
         error.value = e;

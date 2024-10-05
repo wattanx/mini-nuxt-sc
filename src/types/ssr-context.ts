@@ -1,4 +1,4 @@
-import type { H3Event, EventHandlerRequest } from 'h3';
+import type { H3Event } from 'h3';
 import type { SSRContext as VueSsrContext } from 'vue/server-renderer';
 
 export interface IslandClientResponse {
@@ -17,7 +17,7 @@ export interface IslandContext {
 }
 
 export interface SSRContext extends VueSsrContext {
-  islandContext: IslandContext;
+  islandContext?: IslandContext;
   teleports?: Record<string, string>;
   event: H3Event;
 }

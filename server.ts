@@ -46,6 +46,7 @@ if (!isProduction) {
 } else {
   const compression = (await import('compression')).default;
   const sirv = (await import('sirv')).default;
+  // @ts-expect-error
   app.use(fromNodeMiddleware(compression()));
   app.use(base, fromNodeMiddleware(sirv('./dist/client', { extensions: [] })));
 }
@@ -77,9 +78,15 @@ router.get(
         render = (await import('./dist/server/entry-server.js')).render;
       }
 
-      const rendered = await render({ event });
+      const ssrContext = {
+        event,
+      };
 
-      const html = template.replace(`<!--app-head-->`, rendered.head ?? '').replace(`<!--app-html-->`, rendered.html ?? '');
+      const rendered = await render(ssrContext);
+
+      const html = template
+        .replace(`<!--app-head-->`, rendered.head ?? '')
+        .replace(`<!--app-html-->`, replaceServerOnlyComponentsSlots(ssrContext, rendered.html) ?? '');
 
       return html;
     } catch (e) {
@@ -110,6 +117,7 @@ async function getIslandContext(event) {
     id: hashId,
     name: componentName,
     props: destr(context.props) || {},
+    uid: destr(context.uid) || undefined,
   };
 
   return ctx;
@@ -140,7 +148,7 @@ router.get(
 
       return {
         id: islandContext.id,
-        html: replaceServerOnlyComponentsSlots(ssrContext, rendered.html),
+        html: rendered.html,
       };
     } catch (e) {
       vite?.ssrFixStacktrace(e);
@@ -168,14 +176,9 @@ function replaceServerOnlyComponentsSlots(ssrContext: SSRContext, html: string):
     if (!uid || !slot) {
       continue;
     }
-    html = html.replace(
-      new RegExp(
-        `<div nuxt-ssr-component-uid="${uid}"[^>]*>((?!nuxt-ssr-slot-name="${slot}"|nuxt-ssr-component-uid)[\\s\\S])*<div [^>]*nuxt-ssr-slot-name="${slot}"[^>]*>`
-      ),
-      (full) => {
-        return full + teleports[key];
-      }
-    );
+    html = html.replace(new RegExp(` data-island-uid="${uid}" data-island-slot="${slot}"[^>]*>`), (full) => {
+      return full + teleports[key];
+    });
   }
   return html;
 }

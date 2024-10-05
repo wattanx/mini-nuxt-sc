@@ -39,7 +39,7 @@ export const islandsTransform = createUnplugin(() => {
             s.overwrite(
               startingIndex + loc[0].start,
               startingIndex + loc[0].end,
-              `<div style="display: contents;" nuxt-ssr-slot-name="${slotName}" />`
+              `<div style="display: contents;" data-island-uid data-island-slot="${slotName}" />`
             );
           }
         }

@@ -1,4 +1,3 @@
-import type { RendererNode } from 'vue';
 import {
   watch,
   computed,
@@ -18,15 +17,14 @@ import { randomUUID } from 'uncrypto';
 import { joinURL, withQuery } from 'ufo';
 import { debounce } from 'perfect-debounce';
 import { useSSRContext } from 'vue';
-import { getSlotProps } from './utils';
+import { getSlotProps, getFragmentHTML } from './utils';
 import { SSRContext } from '../types/ssr-context';
 
 const pKey = '_islandPromises';
-const SSR_UID_RE = /nuxt-ssr-component-uid="([^"]*)"/;
-const UID_ATTR = /nuxt-ssr-component-uid(="([^"]*)")?/;
-const SLOTNAME_RE = /nuxt-ssr-slot-name="([^"]*)"/g;
-const SLOT_FALLBACK_RE =
-  /<div nuxt-slot-fallback-start="([^"]*)"[^>]*><\/div>(((?!<div nuxt-slot-fallback-end[^>]*>)[\s\S])*)<div nuxt-slot-fallback-end[^>]*><\/div>/g;
+const SSR_UID_RE = /data-island-uid="([^"]*)"/;
+const DATA_ISLAND_UID_RE = /data-island-uid/g;
+const SLOTNAME_RE = /data-island-slot="([^"]*)"/g;
+const SLOT_FALLBACK_RE = / data-island-slot="([^"]*)"[^>]*>/g;
 
 export default defineComponent({
   name: 'Island',
@@ -63,9 +61,11 @@ export default defineComponent({
     onMounted(() => {
       mounted.value = true;
     });
-    const ssrHTML = ref<string>(
-      import.meta.client ? getFragmentHTML(instance.vnode?.el ?? null).join('') ?? '<div></div>' : '<div></div>'
-    );
+    const ssrHTML = ref<string>('');
+    if (import.meta.client && instance.vnode?.el) {
+      ssrHTML.value = getFragmentHTML(instance.vnode.el, true)?.join('') || '';
+    }
+
     const uid = ref<string>(ssrHTML.value.match(SSR_UID_RE)?.[1] ?? randomUUID());
     const availableSlots = computed(() => {
       return [...ssrHTML.value.matchAll(SLOTNAME_RE)].map((m) => m[1]);
@@ -73,12 +73,13 @@ export default defineComponent({
 
     const html = computed(() => {
       const currentSlots = Object.keys(slots);
-      return ssrHTML.value.replace(SLOT_FALLBACK_RE, (full, slotName, content) => {
-        // remove fallback to insert slots
-        if (currentSlots.includes(slotName)) {
-          return '';
+      let html = ssrHTML.value;
+
+      return html.replaceAll(SLOT_FALLBACK_RE, (full, slotName) => {
+        if (!currentSlots.includes(slotName)) {
+          return full;
         }
-        return content;
+        return full;
       });
     });
 
@@ -110,7 +111,7 @@ export default defineComponent({
         })
       );
 
-      const result = import.meta.server || !import.meta.dev ? await r.json() : r._data;
+      const result = await r.json();
 
       return result;
     }
@@ -130,9 +131,7 @@ export default defineComponent({
       try {
         const res = await ssrApp[pKey][uid.value];
 
-        ssrHTML.value = res.html.replace(UID_ATTR, () => {
-          return `nuxt-ssr-component-uid="${randomUUID()}"`;
-        });
+        ssrHTML.value = res.html.replaceAll(DATA_ISLAND_UID_RE, `data-island-uid="${uid.value}"`);
 
         key.value++;
         error.value = null;
@@ -142,6 +141,7 @@ export default defineComponent({
           await nextTick();
         }
         setUid();
+        teleportKey.value++;
       } catch (e) {
         console.error(e);
         error.value = e;
@@ -178,7 +178,7 @@ export default defineComponent({
         ),
       ];
 
-      if (uid.value && (mounted.value || import.meta.server)) {
+      if (uid.value && (mounted.value || instance.vnode?.el || import.meta.server) && html.value) {
         for (const slot in slots) {
           if (availableSlots.value.includes(slot)) {
             nodes.push(
@@ -186,8 +186,9 @@ export default defineComponent({
                 Teleport,
                 {
                   to: import.meta.client
-                    ? `[nuxt-ssr-component-uid='${uid.value}'] [nuxt-ssr-slot-name='${slot}']`
+                    ? `[data-island-uid="${uid.value}"][data-island-slot="${slot}"]`
                     : `uid=${uid.value};slot=${slot}`,
+                  key: teleportKey.value,
                 },
                 {
                   default: () => (slotProps.value[slot] ?? [undefined]).map((data: any) => slots[slot]?.(data)),
@@ -201,34 +202,3 @@ export default defineComponent({
     };
   },
 });
-
-function getFragmentHTML(element: RendererNode | null) {
-  if (element) {
-    if (element.nodeName === '#comment' && element.nodeValue === '[') {
-      return getFragmentChildren(element);
-    }
-    return [element.outerHTML];
-  }
-  return [];
-}
-
-function getFragmentChildren(element: RendererNode | null, blocks: string[] = []) {
-  if (element && element.nodeName) {
-    if (isEndFragment(element)) {
-      return blocks;
-    } else if (!isStartFragment(element)) {
-      blocks.push(element.outerHTML);
-    }
-
-    getFragmentChildren(element.nextSibling, blocks);
-  }
-  return blocks;
-}
-
-function isStartFragment(element: RendererNode) {
-  return element.nodeName === '#comment' && element.nodeValue === '[';
-}
-
-function isEndFragment(element: RendererNode) {
-  return element.nodeName === '#comment' && element.nodeValue === ']';
-}

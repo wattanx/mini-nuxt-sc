@@ -1,4 +1,4 @@
-import { defineComponent, createVNode, Teleport, h } from 'vue';
+import { defineComponent, createVNode } from 'vue';
 import { islandComponents } from './component.island';
 
 export default defineComponent({
@@ -21,6 +21,6 @@ export default defineComponent({
       await component.__asyncLoader?.();
     }
 
-    return () => createVNode(component || 'span', { ...props.context.props, 'nuxt-ssr-component-uid': '' });
+    return () => createVNode(component || 'span', { ...props.context.props, 'data-island-uid': '' });
   },
 });

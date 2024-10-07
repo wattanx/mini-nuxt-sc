@@ -14,3 +14,10 @@ This repository is a minimal implementation of Nuxt Server Components
 | v-for                  | ❌     |
 | server only components | ❌     |
 | selective hydration    | ❌     |
+
+## Development
+
+```bash
+pnpm install
+pnpm dev
+```

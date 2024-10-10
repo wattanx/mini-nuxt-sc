@@ -8,7 +8,7 @@
     "build": "npm run build:client && npm run build:server && npm run build:island",
     "build:client": "vite build --ssrManifest --outDir dist/client",
     "build:server": "vite build --ssr src/entry-server.js --outDir dist/server --config vite.ssr.config.ts",
-    "build:island": "vite build --ssr src/entry-island.js --outDir dist/island --config vite.ssr.config.ts",
+    "build:island": "vite build --ssr lib/entry-island.js --outDir dist/island --config vite.ssr.config.ts",
     "preview": "pnpm run build && NODE_ENV=production tsx server.ts",
     "dev:nitro": "pnpm run build && nitro dev"
   },

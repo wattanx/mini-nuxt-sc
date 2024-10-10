@@ -11,7 +11,7 @@ import {
 } from 'h3';
 import { listen } from 'listhen';
 import destr from 'destr';
-import type { SSRContext } from './src/types/ssr-context';
+import type { SSRContext } from './types/ssr-context';
 import { createFetch as createLocalFetch, createCall } from 'unenv/runtime/fetch/index';
 
 // Constants
@@ -132,7 +132,7 @@ router.get(
 
       let render;
       if (!isProduction) {
-        render = (await vite.ssrLoadModule('/src/entry-island.js')).render;
+        render = (await vite.ssrLoadModule('./lib/entry-island.js')).render;
       } else {
         render = (await import('./dist/island/entry-island.js')).render;
       }

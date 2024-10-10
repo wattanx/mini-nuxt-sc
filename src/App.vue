@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import Boundary from './components/Boundary.vue';
-import Island from './lib/Island';
+import Island from '../lib/Island';
 
 const count = ref(0);
 </script>

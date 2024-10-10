@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import fsp from 'node:fs/promises';
 import sanitizeHtml from 'sanitize-html';
 import { marked } from 'marked';
 
-const content = await fsp.readFile('content/example.md', 'utf-8');
+const content = `# Code Example
+
+this is code example.`;
 const html = await marked(content || '');
 const sanitizedHtml = sanitizeHtml(html);
 </script>
@@ -14,7 +15,7 @@ const sanitizedHtml = sanitizeHtml(html);
 
 <style scoped>
 :deep(h1, h2, h3, h4) {
-  @apply mb-1 mt-10 font-semibold;
+  @apply mb-1 mt-4 font-semibold;
 }
 
 :deep(h2 a) {

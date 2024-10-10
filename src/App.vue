@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import Boundary from './components/Boundary.vue';
-import Island from '../lib/Island';
+import CodeExample from './components/CodeExample.vue';
+import MarkdownRender from './components/MarkdownRender.vue';
 
 const count = ref(0);
 </script>
@@ -11,15 +12,16 @@ const count = ref(0);
   <Suspense>
     <Boundary label="Client Component">
       <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
-      <Island name="CodeExample" :props="{ count }">
+      <CodeExample :count="count">
         <Boundary label="Client Component" class="mt-6">
           <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
         </Boundary>
-      </Island>
+      </CodeExample>
     </Boundary>
   </Suspense>
-  <h2 class="py-8">Markdown Example</h2>
-  <Island name="MarkdownRender" />
+
+  <h2 class="py-4">Markdown Example</h2>
+  <MarkdownRender />
 </template>
 
 <style scoped>

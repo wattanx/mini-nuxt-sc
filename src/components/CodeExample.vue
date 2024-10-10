@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import hljs from 'highlight.js/lib/core';
 import typescript from 'highlight.js/lib/languages/typescript';
 import 'highlight.js/styles/github-dark.css';
@@ -11,8 +12,8 @@ type Props = {
 
 const props = defineProps<Props>();
 
-const code = `const a = ${props.count}`;
-const html = hljs.highlightAuto(code).value;
+const code = computed(() => `const a = ${props.count}`);
+const html = computed(() => hljs.highlightAuto(code.value).value);
 </script>
 
 <template>

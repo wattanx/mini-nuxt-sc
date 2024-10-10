@@ -7,6 +7,7 @@ const count = ref(0);
 </script>
 
 <template>
+  <h2 class="py-8">Basic Example</h2>
   <Suspense>
     <Boundary label="Client Component">
       <button class="px-2 py-1 mt-2 bg-gray-800 rounded-md" @click="count++">increment</button>
@@ -17,6 +18,8 @@ const count = ref(0);
       </Island>
     </Boundary>
   </Suspense>
+  <h2 class="py-8">Markdown Example</h2>
+  <Island name="MarkdownRender" />
 </template>
 
 <style scoped>
